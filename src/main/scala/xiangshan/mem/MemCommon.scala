@@ -32,6 +32,17 @@ import xiangshan.cache.wpu.ReplayCarry
 import xiangshan.mem.prefetch.PrefetchReqBundle
 import math._
 
+object genAMOlgsize {
+  def apply(sizeEncode: UInt): UInt = {
+    (LookupTree(sizeEncode, List(
+      "b00".U -> 0.U, // if here, not AMO
+      "b01".U -> 0.U, // if here, not AMO
+      "b10".U -> 2.U, // AMO*.W, 4B
+      "b11".U -> 3.U  // AMO*.D, 8B
+    ))).asUInt
+  }
+}
+
 object genWmask {
   def apply(addr: UInt, sizeEncode: UInt): UInt = {
     (LookupTree(sizeEncode, List(

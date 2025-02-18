@@ -44,6 +44,9 @@ import xiangshan.mem.prefetch._
 import xiangshan.mem.trace._
 import xiangshan.mem.LqPtr
 
+import utility.{MemReqSource, ParallelLookUp, ParallelPriorityMux}
+import TLMessages.{AccessAckData, ReleaseAck}
+
 class MissReqWoStoreData(implicit p: Parameters) extends DCacheBundle {
   val source = UInt(sourceTypeWidth.W)
   val pf_source = UInt(L1PfSourceBits.W)
@@ -61,6 +64,8 @@ class MissReqWoStoreData(implicit p: Parameters) extends DCacheBundle {
   val amo_data   = UInt(QuadWordBits.W)
   val amo_mask   = UInt(QuadWordBytes.W)
   val amo_cmp    = UInt(QuadWordBits.W) // data to be compared in AMOCAS
+
+  val amo_lgsize = UInt(2.W)
 
   val req_coh = new ClientMetadata
   val id = UInt(reqIdWidth.W)
@@ -116,6 +121,24 @@ class MissReq(implicit p: Parameters) extends MissReqWoStoreData {
 
   def toMissReqWoStoreData(): MissReqWoStoreData = {
     this.viewAsSupertype(new MissReqWoStoreData)
+//    val out = Wire(new MissReqWoStoreData)
+//    out.source := source
+//    out.pf_source := pf_source
+//    out.cmd := cmd
+//    out.addr := addr
+//    out.vaddr := vaddr
+//    out.full_overwrite := full_overwrite
+//    out.word_idx := word_idx
+//    out.amo_data := amo_data
+//    out.amo_mask := amo_mask
+//    out.amo_addr := amo_addr
+//    out.amo_lgsize := amo_lgsize
+//    out.req_coh := req_coh
+//    out.id := id
+//    out.cancel := cancel
+//    out.pc := pc
+//    out.lqIdx := lqIdx
+//    out
   }
 }
 
@@ -334,7 +357,7 @@ class CMOUnit(edge: TLEdgeOut)(implicit p: Parameters) extends DCacheModule {
   assert(!(state =/= s_wresp && io.resp_chanD.valid))
 }
 
-class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DCacheModule 
+class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DCacheModule
   with HasCircularQueuePtrHelper
  {
   val io = IO(new Bundle() {
@@ -374,6 +397,9 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
     val main_pipe_resp = Input(Bool())
     val main_pipe_refill_resp = Input(Bool())
     val main_pipe_replay = Input(Bool())
+
+    // AMO accelerate, direct to atomicsUnit
+    val atomic_resp_entry = ValidIO(new MainPipeResp)
 
     // for main pipe s2
     val refill_info = ValidIO(new MissQueueRefillInfo)
@@ -591,10 +617,18 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
 
   val hasData = RegInit(true.B)
   val isDirty = RegInit(false.B)
+
+  val amo_data_back = Reg(UInt(DataBits.W))
+
   when (io.mem_grant.fire) {
     w_grantfirst := true.B
     grant_param := io.mem_grant.bits.param
-    when (edge.hasData(io.mem_grant.bits)) {
+    when (io.mem_grant.bits.opcode === AccessAckData){
+      // AccessAckData only for AMO, so one beat will finish ?
+      amo_data_back := io.mem_grant.bits.data
+      w_grantlast := true.B
+      hasData := true.B
+    }.elsewhen (edge.hasData(io.mem_grant.bits)) {
       // GrantData
       when (isKeyword) {
        for (i <- 0 until beatRows) {
@@ -710,6 +744,20 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
       )
   }
 
+  def toAtomicParam(cmd: UInt): UInt = {
+    ParallelLookUp(cmd, Seq(
+      M_XA_MIN  -> 0.U,
+      M_XA_MAX  -> 1.U,
+      M_XA_MINU -> 2.U,
+      M_XA_MAXU -> 3.U,
+      M_XA_ADD  -> 4.U,
+      M_XA_XOR  -> 0.U,
+      M_XA_OR   -> 1.U,
+      M_XA_AND  -> 2.U,
+      M_XA_SWAP -> 3.U
+    ))
+  }
+
   // req_valid will be updated 1 cycle after primary_fire, so next cycle, this entry cannot accept a new req
   when(GatedValidRegNext(io.id >= ((cfg.nMissEntries).U - io.nMaxPrefetchEntry))) {
     // can accept prefetch req
@@ -755,6 +803,7 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
   // Note: now, only wait for store, because store may acquire T
   io.mem_acquire.valid := !s_acquire && !(io.miss_req_pipe_reg.merge && !io.miss_req_pipe_reg.cancel && miss_req_pipe_reg_bits.isFromStore) 
   val grow_param = req.req_coh.onAccess(req.cmd)._2
+  val atomic_param = toAtomicParam(req.cmd)
   val acquireBlock = edge.AcquireBlock(
     fromSource = io.id,
     toAddress = req.addr,
@@ -767,7 +816,23 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
     lgSize = (log2Up(cfg.blockBytes)).U,
     growPermissions = grow_param
   )._2
-  io.mem_acquire.bits := Mux(full_overwrite, acquirePerm, acquireBlock)
+  val arithmetic = edge.Arithmetic(
+    fromSource = io.id,
+    toAddress = req.amo_addr,
+    lgSize = req.amo_lgsize,
+    data = req.amo_data,
+    atomic = atomic_param
+  )._2
+  val logical = edge.Logical(
+    fromSource = io.id,
+    toAddress = req.amo_addr,
+    lgSize = req.amo_lgsize,
+    data = req.amo_data,
+    atomic = atomic_param
+  )._2
+  val atomicOption = Mux(isAMOLogical(req.cmd), logical, arithmetic)
+  val amo_miss = req.isFromAMO && req.req_coh.onAccess(req.cmd)._2 === NtoT
+  io.mem_acquire.bits := Mux(amo_miss, atomicOption, Mux(full_overwrite, acquirePerm, acquireBlock))
   // resolve cache alias by L2
   io.mem_acquire.bits.user.lift(AliasKey).foreach( _ := req.vaddr(13, 12))
   // pass vaddr to l2
@@ -801,8 +866,21 @@ class MissEntry(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
   io.mem_finish.valid := !s_grantack && w_grantfirst
   io.mem_finish.bits := grantack
 
+  // Send AccessAckData to AtomicsUnit directly
+  // Not finished, DontCare need to update
+  // .valid signal probably wrong
+  io.atomic_resp_entry.valid := req_valid && amo_miss && w_grantlast
+  io.atomic_resp_entry.bits.source := req.source
+  io.atomic_resp_entry.bits.data := amo_data_back
+  io.atomic_resp_entry.bits.miss := false.B
+  io.atomic_resp_entry.bits.miss_id := io.id
+  io.atomic_resp_entry.bits.error := DontCare
+  io.atomic_resp_entry.bits.replay := DontCare
+  io.atomic_resp_entry.bits.ack_miss_queue := DontCare
+  io.atomic_resp_entry.bits.id := DontCare
+
   // Send mainpipe_req when receive hint from L2 or receive data without hint
-  io.main_pipe_req.valid := !s_mainpipe_req && (w_l2hint || w_grantlast)
+  io.main_pipe_req.valid := !s_mainpipe_req && (w_l2hint || w_grantlast) && !amo_miss
   io.main_pipe_req.bits := DontCare
   io.main_pipe_req.bits.miss := true.B
   io.main_pipe_req.bits.miss_id := io.id
@@ -909,6 +987,7 @@ class MissQueue(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
     val queryMQ = Vec(reqNum, Flipped(new DCacheMQQueryIOBundle))
 
     val mem_acquire = DecoupledIO(new TLBundleA(edge.bundle))
+    // Temporarily not change the name, but work as Grant & AccessAckData
     val mem_grant = Flipped(DecoupledIO(new TLBundleD(edge.bundle)))
     val mem_finish = DecoupledIO(new TLBundleE(edge.bundle))
 
@@ -919,6 +998,9 @@ class MissQueue(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
 
     val mainpipe_info = Input(new MainPipeInfoToMQ)
     val refill_info = ValidIO(new MissQueueRefillInfo)
+
+    // for atomic accelerate
+    val atomic_resp = ValidIO(new MainPipeResp)
 
     // block probe
     val probe_addr = Input(UInt(PAddrBits.W))
@@ -1136,6 +1218,9 @@ class MissQueue(edge: TLEdgeOut, reqNum: Int)(implicit p: Parameters) extends DC
 
   io.refill_info.valid := VecInit(entries.zipWithIndex.map{ case(e,i) => e.io.refill_info.valid && io.mainpipe_info.s2_valid && io.mainpipe_info.s2_miss_id === i.U}).asUInt.orR
   io.refill_info.bits := Mux1H(entries.zipWithIndex.map{ case(e,i) => (io.mainpipe_info.s2_miss_id === i.U) -> e.io.refill_info.bits })
+
+  io.atomic_resp.valid := VecInit(entries.zipWithIndex.map{ case(e,i) => e.io.atomic_resp_entry.valid}).asUInt.orR
+  io.atomic_resp.bits := Mux1H(entries.zipWithIndex.map{ case(e,i) => (e.io.atomic_resp_entry.valid === true.B) -> e.io.atomic_resp_entry.bits })
 
   acquire_from_pipereg.valid := miss_req_pipe_reg.can_send_acquire(io.req.valid, io.req.bits)
   acquire_from_pipereg.bits := miss_req_pipe_reg.get_acquire(io.l2_pf_store_only)

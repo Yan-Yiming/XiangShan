@@ -56,9 +56,12 @@ class MainPipeReq(implicit p: Parameters) extends DCacheBundle {
 
   // which word does amo work on?
   val word_idx = UInt(log2Up(cfg.blockBytes * 8 / DataBits).W)
+  val amo_addr   = UInt(PAddrBits.W)
   val amo_data   = UInt(QuadWordBits.W)
   val amo_mask   = UInt(QuadWordBytes.W)
   val amo_cmp    = UInt(QuadWordBits.W) // data to be compared in AMOCAS
+
+  val amo_lgsize = UInt(2.W)
 
   // error
   val error = Bool()

@@ -52,7 +52,7 @@ trait MemoryOpConstants {
   def M_XA_CASW = "b11010".U // AMOCAS.W
   def M_XA_CASD = "b11011".U // AMOCAS.D
 
-  def isAMOLogical(cmd: UInt) = cmd === M_XA_SWAP || cmd === M_XA_XOR || cmd === M_XA_OR || cmd === M_XA_AND
+  def isAMOLogical(cmd: UInt) = (cmd === M_XA_SWAP || cmd === M_XA_XOR || cmd === M_XA_OR || cmd === M_XA_AND)
   def isAMOArithmetic(cmd: UInt) = cmd === M_XA_ADD || cmd === M_XA_MIN || cmd === M_XA_MAX || cmd === M_XA_MINU || cmd === M_XA_MAXU
   def isAMOCAS(cmd: UInt) = cmd === M_XA_CASW || cmd === M_XA_CASD || cmd === M_XA_CASQ
   def isAMOCASQ(cmd: UInt) = cmd === M_XA_CASQ
