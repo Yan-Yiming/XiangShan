@@ -497,6 +497,7 @@ class BackendInlinedImp(override val wrapper: BackendInlined)(implicit p: Parame
   dataPath.io.topDownInfo.l1Miss := RegNext(io.topDownInfo.l1Miss)
   dataPath.io.topDownInfo.l2TopMiss.l2Miss := io.topDownInfo.l2TopMiss.l2Miss
   dataPath.io.topDownInfo.l2TopMiss.l3Miss := io.topDownInfo.l2TopMiss.l3Miss
+  dataPath.io.topDownInfo.l2TopMiss.l3AMOSingleHitTooMuch := io.topDownInfo.l2TopMiss.l3AMOSingleHitTooMuch
 
   og2ForVector.io.flush := ctrlBlock.io.toDataPath.flush
   og2ForVector.io.ldCancel := io.mem.ldCancel

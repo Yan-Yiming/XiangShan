@@ -772,6 +772,7 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
   miss_req.store_data := s2_req.store_data
   miss_req.store_mask := s2_req.store_mask
   miss_req.word_idx := s2_req.word_idx
+  miss_req.amo_addr := s2_req.amo_addr
   miss_req.amo_data := s2_req.amo_data
   miss_req.amo_mask := s2_req.amo_mask
   miss_req.amo_cmp  := s2_req.amo_cmp

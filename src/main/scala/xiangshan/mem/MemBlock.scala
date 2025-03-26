@@ -2029,6 +2029,8 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   io.topDownInfo.toBackend.l1Miss := dcache.io.l1Miss
   io.topDownInfo.toBackend.l2TopMiss.l2Miss := RegNext(io.topDownInfo.fromL2Top.l2Miss)
   io.topDownInfo.toBackend.l2TopMiss.l3Miss := RegNext(io.topDownInfo.fromL2Top.l3Miss)
+  io.topDownInfo.toBackend.l2TopMiss.l3AMOSingleHitTooMuch := RegNext(io.topDownInfo.fromL2Top.l3AMOSingleHitTooMuch)
+  dcache.io.l3AMOSingleHitTooMuch := RegNext(io.topDownInfo.fromL2Top.l3AMOSingleHitTooMuch)
 
   val hyLdDeqCount = PopCount(io.ooo_to_mem.issueHya.map(x => x.valid && FuType.isLoad(x.bits.uop.fuType)))
   val hyStDeqCount = PopCount(io.ooo_to_mem.issueHya.map(x => x.valid && FuType.isStore(x.bits.uop.fuType)))

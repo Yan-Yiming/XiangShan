@@ -318,19 +318,6 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
     ))
   }
 
-    pipe_req.miss := false.B
-    pipe_req.probe := false.B
-    pipe_req.probe_need_data := false.B
-    pipe_req.source := AMO_SOURCE.U
-    pipe_req.addr   := get_block_addr(paddr)
-    pipe_req.vaddr  := get_block_addr(in.src(0)) // vaddr
-    pipe_req.word_idx  := get_word(paddr)
-    pipe_req.amo_addr  := paddr
-    pipe_req.amo_data  := genWdata(in.src(1), in.uop.fuOpType(1,0))
-    pipe_req.amo_mask  := genWmask(paddr, in.uop.fuOpType(1,0))
-    pipe_req.amo_lgsize:= genAMOlgsize(in.uop.fuOpType(1,0))
-
-
   def genWmaskAMO(addr: UInt, sizeEncode: UInt): UInt = {
     /**
       * `MainPipeReq` uses `word_idx` to recognize which 64-bits data bank to operate on. Double-word atomics are
@@ -543,6 +530,9 @@ class AtomicsUnit(implicit p: Parameters) extends XSModule
   pipe_req.amo_data := genWdataAMO(rs2, uop.fuOpType)
   pipe_req.amo_mask := genWmaskAMO(paddr, uop.fuOpType)
   pipe_req.amo_cmp  := genWdataAMO(rd, uop.fuOpType)
+  
+  pipe_req.amo_addr  := paddr
+  pipe_req.amo_lgsize:= genAMOlgsize(uop.fuOpType)
 
   if (env.EnableDifftest) {
     val difftest = DifftestModule(new DiffAtomicEvent)

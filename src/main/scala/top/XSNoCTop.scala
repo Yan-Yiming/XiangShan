@@ -211,6 +211,7 @@ class XSNoCTop()(implicit p: Parameters) extends BaseXSSoc with HasSoCParameter
 
     core_with_l2.module.io.debugTopDown.l3MissMatch := false.B
     core_with_l2.module.io.l3Miss := false.B
+    core_with_l2.module.io.l3AMOSingleHitTooMuch := false.B
   }
 
   lazy val module = new XSNoCTopImp(this)

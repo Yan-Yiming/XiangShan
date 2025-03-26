@@ -821,6 +821,7 @@ class DCacheIO(implicit p: Parameters) extends DCacheBundle {
   val cmoOpReq = Flipped(DecoupledIO(new CMOReq))
   val cmoOpResp = DecoupledIO(new CMOResp)
   val l1Miss = Output(Bool())
+  val l3AMOSingleHitTooMuch = Input(Bool())
 }
 
 private object ArbiterCtrl {
@@ -1021,6 +1022,7 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
   missQueue.io.debugTopDown <> io.debugTopDown
   missQueue.io.l2_hint <> RegNext(io.l2_hint)
   missQueue.io.mainpipe_info := mainPipe.io.mainpipe_info
+  missQueue.io.l3AMOSingleHitTooMuch := io.l3AMOSingleHitTooMuch
   mainPipe.io.refill_info := missQueue.io.refill_info
   mainPipe.io.replace_block := missQueue.io.replace_block
   mainPipe.io.sms_agt_evict_req <> io.sms_agt_evict_req
@@ -1578,6 +1580,8 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
   // connect bus d
   missQueue.io.mem_grant.valid := false.B
   missQueue.io.mem_grant.bits  := DontCare
+  missQueue.io.mem_accessackData.valid := false.B
+  missQueue.io.mem_accessackData.bits  := DontCare
 
   wb.io.mem_grant.valid := false.B
   wb.io.mem_grant.bits  := DontCare
@@ -1586,7 +1590,9 @@ class DCacheImp(outer: DCache) extends LazyModuleImp(outer) with HasDCacheParame
   bus.d.ready := false.B
   when (bus.d.bits.opcode === TLMessages.Grant || bus.d.bits.opcode === TLMessages.GrantData || bus.d.bits.opcode === TLMessages.CBOAck) {
     missQueue.io.mem_grant <> bus.d
-  } .elsewhen (bus.d.bits.opcode === TLMessages.ReleaseAck) {
+  }.elsewhen (bus.d.bits.opcode === TLMessages.AccessAckData) {
+    missQueue.io.mem_accessackData <> bus.d
+  }.elsewhen (bus.d.bits.opcode === TLMessages.ReleaseAck) {
     wb.io.mem_grant <> bus.d
   } .otherwise {
     assert (!bus.d.fire)

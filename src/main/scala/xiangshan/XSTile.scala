@@ -112,6 +112,7 @@ class XSTile()(implicit p: Parameters) extends LazyModule
         val l3MissMatch = Input(Bool())
       }
       val l3Miss = Input(Bool())
+      val l3AMOSingleHitTooMuch = Input(Bool())
       val chi = if (enableCHI) Some(new PortIO) else None
       val nodeID = if (enableCHI) Some(Input(UInt(NodeIDWidth.W))) else None
       val clintTime = Input(ValidIO(UInt(64.W)))
@@ -191,6 +192,9 @@ class XSTile()(implicit p: Parameters) extends LazyModule
     core.module.io.debugTopDown.l3MissMatch := io.debugTopDown.l3MissMatch
     l2top.module.io.l3Miss.fromTile := io.l3Miss
     core.module.io.topDownInfo.l3Miss := l2top.module.io.l3Miss.toCore
+    l2top.module.io.l3AMOSingleHitTooMuch.fromTile := io.l3AMOSingleHitTooMuch
+    core.module.io.topDownInfo.l3AMOSingleHitTooMuch := l2top.module.io.l3AMOSingleHitTooMuch.toCore
+    // core.module.io.topDownInfo.l3AMOSingleHitTooMuch := l2top.module.io.l3AMOSingleHitTooMuch.toCore
 
     io.chi.foreach(_ <> l2top.module.io.chi.get)
     l2top.module.io.nodeID.foreach(_ := io.nodeID.get)
