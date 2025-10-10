@@ -29,6 +29,7 @@ TOP_V = $(RTL_DIR)/$(TOP).$(RTL_SUFFIX)
 SIM_TOP_V = $(RTL_DIR)/$(SIM_TOP).$(RTL_SUFFIX)
 
 SCALA_FILE = $(shell find ./src/main/scala -name '*.scala')
+LLC_FILE = $(shell find ./openLLC/src/main -name '*.scala')
 TEST_FILE = $(shell find ./src/test/scala -name '*.scala')
 
 MEM_GEN = ./scripts/vlsi_mem_gen
@@ -176,7 +177,7 @@ jar:
 test-jar:
 	mill -i xiangshan.test.assembly
 
-$(TOP_V): $(SCALA_FILE)
+$(TOP_V): $(SCALA_FILE) $(LLC_FILE)
 	mkdir -p $(@D)
 	$(TIME_CMD) mill -i $(MILL_BUILD_ARGS) xiangshan.runMain $(FPGATOP)   \
 		--target-dir $(@D) --config $(CONFIG) --issue $(ISSUE) $(FPGA_MEM_ARGS)		\
@@ -194,7 +195,7 @@ endif
 
 verilog: $(TOP_V)
 
-$(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE)
+$(SIM_TOP_V): $(SCALA_FILE) $(TEST_FILE) $(LLC_FILE)
 	mkdir -p $(@D)
 	@echo -e "\n[mill] Generating Verilog files..." > $(TIMELOG)
 	@date -R | tee -a $(TIMELOG)

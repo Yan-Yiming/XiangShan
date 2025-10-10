@@ -63,7 +63,7 @@ abstract class XSCoreBase()(implicit p: config.Parameters) extends LazyModule
   val csrOut = BundleBridgeSource(Some(() => new DistributedCSRIO()))
   val backend = LazyModule(new Backend(backendParams))
 
-  val memBlock = LazyModule(new MemBlock)
+  val memBlock = LazyModule(new xiangshan.mem.MemBlock)
 
   memBlock.inner.frontendBridge.icache_node := frontend.inner.icache.clientNode
   memBlock.inner.frontendBridge.instr_uncache_node := frontend.inner.instrUncache.clientNode
@@ -109,6 +109,7 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
     val topDownInfo = Input(new Bundle {
       val l2Miss = Bool()
       val l3Miss = Bool()
+      val l3AMOSingleHitTooMuch = Bool()
     })
   })
 
@@ -269,12 +270,14 @@ class XSCoreImp(outer: XSCoreBase) extends LazyModuleImp(outer)
   io.traceCoreInterface <> memBlock.io.traceCoreInterfaceBypass.toL2Top
   memBlock.io.topDownInfo.fromL2Top.l2Miss := io.topDownInfo.l2Miss
   memBlock.io.topDownInfo.fromL2Top.l3Miss := io.topDownInfo.l3Miss
+  memBlock.io.topDownInfo.fromL2Top.l3AMOSingleHitTooMuch := io.topDownInfo.l3AMOSingleHitTooMuch
   memBlock.io.topDownInfo.toBackend.noUopsIssued := backend.io.topDownInfo.noUopsIssued
   backend.io.topDownInfo.lqEmpty := memBlock.io.topDownInfo.toBackend.lqEmpty
   backend.io.topDownInfo.sqEmpty := memBlock.io.topDownInfo.toBackend.sqEmpty
   backend.io.topDownInfo.l1Miss := memBlock.io.topDownInfo.toBackend.l1Miss
   backend.io.topDownInfo.l2TopMiss.l2Miss := memBlock.io.topDownInfo.toBackend.l2TopMiss.l2Miss
   backend.io.topDownInfo.l2TopMiss.l3Miss := memBlock.io.topDownInfo.toBackend.l2TopMiss.l3Miss
+  backend.io.topDownInfo.l2TopMiss.l3AMOSingleHitTooMuch := memBlock.io.topDownInfo.toBackend.l2TopMiss.l3AMOSingleHitTooMuch
 
 
   if (debugOpts.ResetGen) {

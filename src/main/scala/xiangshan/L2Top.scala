@@ -197,6 +197,10 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
         val fromTile = Input(Bool())
         val toCore = Output(Bool())
       }
+      val l3AMOSingleHitTooMuch = new Bundle {
+        val fromTile = Input(Bool())
+        val toCore = Output(Bool())
+      }
       val clintTime = new Bundle {
         val fromTile = Input(ValidIO(UInt(64.W)))
         val toCore = Output(ValidIO(UInt(64.W)))
@@ -226,6 +230,7 @@ class L2TopInlined()(implicit p: Parameters) extends LazyModule
     io.cpu_critical_error.toTile := io.cpu_critical_error.fromCore
     io.l2_flush_done := true.B //TODO connect CoupleedL2
     io.l3Miss.toCore := io.l3Miss.fromTile
+    io.l3AMOSingleHitTooMuch.toCore := io.l3AMOSingleHitTooMuch.fromTile
     io.clintTime.toCore := io.clintTime.fromTile
     // trace interface
     val traceToTile = io.traceCoreInterface.toTile

@@ -69,6 +69,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
         val l3MissMatch = Input(Bool())
       }
       val l3Miss = Input(Bool())
+      val l3AMOSingleHitTooMuch = Input(Bool())
       val chi = EnableCHIAsyncBridge match {
         case Some(param) => new AsyncPortIO(param)
         case None => new PortIO
@@ -100,6 +101,7 @@ class XSTileWrap()(implicit p: Parameters) extends LazyModule
     io.traceCoreInterface <> tile.module.io.traceCoreInterface
     io.debugTopDown <> tile.module.io.debugTopDown
     tile.module.io.l3Miss := io.l3Miss
+    tile.module.io.l3AMOSingleHitTooMuch := io.l3AMOSingleHitTooMuch
     tile.module.io.nodeID.foreach(_ := io.nodeID.get)
 
     // CLINT Async Queue Sink

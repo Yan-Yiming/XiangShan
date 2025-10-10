@@ -788,4 +788,5 @@ class TopDownInfo(implicit p: Parameters) extends XSBundle {
 class TopDownFromL2Top(implicit p: Parameters) extends XSBundle {
   val l2Miss = Bool()
   val l3Miss = Bool()
+  val l3AMOSingleHitTooMuch = Bool()
 }

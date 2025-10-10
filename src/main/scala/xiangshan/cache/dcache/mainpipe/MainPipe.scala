@@ -56,9 +56,12 @@ class MainPipeReq(implicit p: Parameters) extends DCacheBundle {
 
   // which word does amo work on?
   val word_idx = UInt(log2Up(cfg.blockBytes * 8 / DataBits).W)
+  val amo_addr   = UInt(PAddrBits.W)
   val amo_data   = UInt(QuadWordBits.W)
   val amo_mask   = UInt(QuadWordBytes.W)
   val amo_cmp    = UInt(QuadWordBits.W) // data to be compared in AMOCAS
+
+  val amo_lgsize = UInt(2.W)
 
   // error
   val error = Bool()
@@ -769,8 +772,10 @@ class MainPipe(implicit p: Parameters) extends DCacheModule with HasPerfEvents w
   miss_req.store_data := s2_req.store_data
   miss_req.store_mask := s2_req.store_mask
   miss_req.word_idx := s2_req.word_idx
+  miss_req.amo_addr := s2_req.amo_addr
   miss_req.amo_data := s2_req.amo_data
   miss_req.amo_mask := s2_req.amo_mask
+  miss_req.amo_lgsize := s2_req.amo_lgsize
   miss_req.amo_cmp  := s2_req.amo_cmp
   miss_req.req_coh := s2_hit_coh
   miss_req.id := s2_req.id
