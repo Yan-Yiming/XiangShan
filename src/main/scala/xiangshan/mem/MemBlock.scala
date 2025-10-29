@@ -50,7 +50,7 @@ import xiangshan.mem.Bundles._
 import xiangshan.mem.prefetch.{BasePrefecher, L1Prefetcher, SMSParams, SMSPrefetcher}
 import xiangshan.cache._
 import xiangshan.cache.mmu._
-import coupledL2.PrefetchRecv
+import coupledL2.{PrefetchCtrlFromCore, PrefetchRecv}
 import utility.mbist.{MbistInterface, MbistPipeline}
 import utility.sram.{SramBroadcastBundle, SramHelper}
 
@@ -312,7 +312,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     val ifetchPrefetch = Vec(LduCnt, ValidIO(new SoftIfetchPrefetchBundle))
 
     // misc
-    val dcacheError = ValidIO(new L1CacheErrorInfo)
+    val dcacheError = Output(new L1BusErrorUnitInfo())
     val uncacheError = Output(new L1BusErrorUnitInfo())
     val memInfo = new Bundle {
       val sqFull = Output(Bool())
@@ -349,6 +349,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
     val outer_beu_errors_icache = Output(new L1BusErrorUnitInfo)
     val inner_hc_perfEvents = Output(Vec(numPCntHc * coreParams.L2NBanks + 1, new PerfEvent))
     val outer_hc_perfEvents = Input(Vec(numPCntHc * coreParams.L2NBanks + 1, new PerfEvent))
+    val outer_l2PfCtrl = Output(new PrefetchCtrlFromCore)
 
     // reset signals of frontend & backend are generated in memblock
     val reset_backend = Output(Reset())
@@ -401,11 +402,11 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
 
   val csrCtrl = DelayN(io.ooo_to_mem.csrCtrl, 2)
   dcache.io.l2_pf_store_only := RegNext(io.ooo_to_mem.csrCtrl.pf_ctrl.l2_pf_store_only, false.B)
-  io.dcacheError <> DelayNWithValid(dcache.io.error, 2)
+  val dcacheError = DelayNWithValid(dcache.io.error, 2)
+  io.dcacheError <> dcacheError.bits.toL1BusErrorUnitInfo(dcacheError.valid)
   io.uncacheError.ecc_error <> DelayNWithValid(uncache.io.busError.ecc_error, 2)
   when(!csrCtrl.cache_error_enable){
-    io.dcacheError.bits.report_to_beu := false.B
-    io.dcacheError.valid := false.B
+    io.dcacheError.ecc_error.valid := false.B
     io.uncacheError.ecc_error.valid := false.B
   }
 
@@ -2010,6 +2011,7 @@ class MemBlockInlinedImp(outer: MemBlockInlined) extends LazyModuleImp(outer)
   io.outer_msi_ack := io.ooo_to_mem.backendToTopBypass.msiAck
   io.outer_beu_errors_icache := RegNext(io.inner_beu_errors_icache)
   io.inner_hc_perfEvents <> RegNext(io.outer_hc_perfEvents)
+  io.outer_l2PfCtrl := DelayN(io.ooo_to_mem.csrCtrl.pf_ctrl.toL2PrefetchCtrl(), 2)
 
   // vector segmentUnit
   vSegmentUnit.io.in.bits <> io.ooo_to_mem.issueVldu.head.bits
